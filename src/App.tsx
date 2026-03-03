@@ -3,7 +3,7 @@ import { FileText, Download, Image as ImageIcon, FileSpreadsheet, Loader2, Refre
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { ScorecardData, ScorecardCategory, AnalysisSection } from './types';
-import { parseScorecard, generateFromNap } from './services/service';
+import { parseScorecard, generateFromNap, setOpenRouterKey, hasOpenRouterKey } from './services/service';
 import ReportPreview from './components/ReportPreview';
 
 type Mode = 'both' | 'nap' | 'report';
@@ -14,6 +14,8 @@ export default function App() {
   const [domain, setDomain] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('openrouter_key') || '');
+  const [showKeyInput, setShowKeyInput] = useState(!hasOpenRouterKey());
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportData, setReportData] = useState<ScorecardData | null>(null);
@@ -255,6 +257,54 @@ export default function App() {
                 </button>
               </div>
               
+              {showKeyInput && (
+                <div className="mb-6 p-4 bg-[#f0f4ff] rounded-lg border border-[#1645DF]/20">
+                  <label htmlFor="api-key" className="block text-sm font-bold text-[#190074] uppercase mb-1" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>
+                    OpenRouter API Key
+                  </label>
+                  <p className="text-xs text-gray-600 mb-2">
+                    get your free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">openrouter.ai/keys</a>
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      id="api-key"
+                      type="password"
+                      className="flex-1 rounded-lg border border-[#190074]/20 focus:border-[#1645DF] focus:ring-[#1645DF] p-2.5 text-sm font-mono"
+                      placeholder="sk-or-v1-..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (apiKey.trim()) {
+                          setOpenRouterKey(apiKey.trim());
+                          setShowKeyInput(false);
+                        }
+                      }}
+                      disabled={!apiKey.trim()}
+                      className="px-4 py-2 text-sm font-bold uppercase rounded-lg bg-[#1645DF] text-white hover:bg-[#190074] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!showKeyInput && (
+                <div className="mb-4 flex items-center justify-between text-xs text-gray-500">
+                  <span>api key saved</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyInput(true)}
+                    className="text-[#1645DF] hover:underline"
+                  >
+                    change key
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
                 <div className="sm:col-span-2">
                   <label htmlFor="name-input" className="block text-sm font-bold text-[#190074] uppercase mb-1" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>

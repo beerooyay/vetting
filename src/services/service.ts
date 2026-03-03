@@ -3,8 +3,12 @@ import { ScorecardData, Citation } from "../types";
 import { buildSystemPrompt, JSON_SCHEMA } from "./prompt";
 import { enforceStandardScorecard } from "./scorecardUtils";
 
-const OPENROUTER_KEY = (import.meta as any).env?.VITE_OPENROUTER_KEY || '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';
-const FIRECRAWL_KEY = (import.meta as any).env?.VITE_FIRECRAWL_KEY;
+const getOpenRouterKey = () => localStorage.getItem('openrouter_key') || '';
+const getFirecrawlKey = () => localStorage.getItem('firecrawl_key') || '';
+
+export const setOpenRouterKey = (key: string) => localStorage.setItem('openrouter_key', key);
+export const setFirecrawlKey = (key: string) => localStorage.setItem('firecrawl_key', key);
+export const hasOpenRouterKey = () => !!getOpenRouterKey();
 const MODEL = "arcee-ai/trinity-large-preview:free:online";
 const today = () => new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -14,7 +18,8 @@ interface ChatResult {
 }
 
 async function chat(prompt: string, system?: string): Promise<ChatResult> {
-  if (!OPENROUTER_KEY) {
+  const key = getOpenRouterKey();
+  if (!key) {
     throw new Error("OpenRouter key missing.");
   }
 
@@ -29,7 +34,7 @@ async function chat(prompt: string, system?: string): Promise<ChatResult> {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'authorization': `Bearer ${OPENROUTER_KEY}`,
+        'authorization': `Bearer ${key}`,
         'http-referer': window.location.origin,
         'x-title': 'AI Vetting Scorecard',
       },
@@ -317,12 +322,12 @@ interface ResearchContext {
 }
 
 async function mapSite(domain: string): Promise<string[]> {
-  if (!FIRECRAWL_KEY) return [];
+  if (!getFirecrawlKey()) return [];
   try {
     const base = domain.startsWith('http') ? domain : `https://${domain}`;
     const res = await fetch('https://api.firecrawl.dev/v1/map', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${FIRECRAWL_KEY}` },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${getFirecrawlKey()}` },
       body: JSON.stringify({ url: base, limit: 40 }),
     });
     if (!res.ok) return [];
@@ -334,11 +339,11 @@ async function mapSite(domain: string): Promise<string[]> {
 }
 
 async function scrapePage(url: string): Promise<ResearchDoc | null> {
-  if (!FIRECRAWL_KEY || !url) return null;
+  if (!getFirecrawlKey() || !url) return null;
   try {
     const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${FIRECRAWL_KEY}` },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${getFirecrawlKey()}` },
       body: JSON.stringify({ url, formats: ['markdown'], onlyMainContent: true }),
     });
     if (!res.ok) return null;
@@ -355,7 +360,7 @@ async function scrapePage(url: string): Promise<ResearchDoc | null> {
 }
 
 async function searchWithCitations(query: string, location?: string): Promise<ResearchDoc[]> {
-  if (!FIRECRAWL_KEY || !query.trim()) return [];
+  if (!getFirecrawlKey() || !query.trim()) return [];
   try {
     const payload: Record<string, any> = {
       query: query.trim(),
@@ -367,7 +372,7 @@ async function searchWithCitations(query: string, location?: string): Promise<Re
 
     const res = await fetch('https://api.firecrawl.dev/v2/search', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${FIRECRAWL_KEY}` },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${getFirecrawlKey()}` },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -398,7 +403,7 @@ async function searchWithCitations(query: string, location?: string): Promise<Re
 async function gatherDealershipContext(
   details: { name: string; domain: string; address: string; phone: string }
 ): Promise<ResearchContext> {
-  if (!FIRECRAWL_KEY) return { text: '', citations: [] };
+  if (!getFirecrawlKey()) return { text: '', citations: [] };
 
   const { name, domain, address } = details;
   const base = domain.startsWith('http') ? domain : `https://${domain}`;
