@@ -43,6 +43,21 @@
     color: #1645DF;
 }
 
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.5s ease-out;
+}
+
 @font-face {
     font-family: 'Google Sans';
     src: local('Google Sans'), local('Product Sans'), sans-serif;
@@ -196,8 +211,7 @@
     font-size: 11px; 
     margin-bottom: 20px;
     border-radius: 12px; 
-    overflow: hidden; 
-    box-shadow: 0 0 0 1px #e0e0e0; 
+    overflow: hidden;
 }
 
 .report-container th, .report-container td {
@@ -212,7 +226,7 @@
 }
 
 .report-container tbody tr:nth-child(even):not(.section-row):not(.total-row) {
-    background-color: #f9f9f9; 
+    background-color: #ffffff; 
 }
 
 .report-container th {
@@ -251,7 +265,7 @@
 }
 
 .report-container .total-row td {
-    background-color: #f0f0f0;
+    background-color: #ffffff;
     font-family: 'Barlow Semi Condensed', 'Barlow', sans-serif;
     font-size: 16px;
     font-weight: bold;
@@ -295,10 +309,10 @@
     font-size: 15px;
     color: #000000;
     font-family: 'Google Sans', sans-serif; 
-    background-color: #f9f9f9;
+    background-color: #ffffff;
     padding: 20px;
     border-left: 4px solid #1645DF; 
-    border-radius: 0 8px 8px 0;
+    border-radius: 0;
 }
 
 .report-container .additional-text strong {
@@ -306,4 +320,84 @@
     color: #190074;
     font-size: 16px;
     text-transform: uppercase;
+}
+
+.cited-analysis {
+    cursor: text;
+}
+
+.cite-badge {
+    display: inline;
+    background: none;
+    color: #1645DF;
+    font-family: 'Barlow Semi Condensed', 'Barlow', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.cite-badge:hover {
+    color: #190074;
+    text-decoration: underline;
+}
+
+.cite-badge.static {
+    cursor: default;
+    font-size: 9px;
+}
+
+.sources-section {
+    margin-top: 24px;
+    padding-top: 16px;
+}
+
+.sources-section h3 {
+    font-family: 'Barlow Semi Condensed', 'Barlow', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #1645DF;
+    margin: 0 0 10px 0;
+}
+
+.sources-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+}
+
+.source-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.source-num {
+    font-family: 'Barlow Semi Condensed', 'Barlow', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    color: #1645DF;
+}
+
+.source-link {
+    font-size: 10px;
+    color: #190074;
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    padding: 2px 0;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    transition: color 0.15s;
+}
+
+.source-link:hover {
+    color: #1645DF;
+    text-decoration: underline;
 }

@@ -21,6 +21,12 @@ export interface AnalysisSection {
   items: PointOfInterest[];
 }
 
+export interface Citation {
+  id: number;
+  url: string;
+  title: string;
+}
+
 export interface ScorecardData {
   dealershipName: string;
   domain: string;
@@ -31,4 +37,5 @@ export interface ScorecardData {
   maxScore: number;
   analysisSections: AnalysisSection[];
   concludingSummary: string;
+  citations?: Citation[];
 }

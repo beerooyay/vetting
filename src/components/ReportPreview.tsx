@@ -1,7 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Search, Loader2 } from 'lucide-react';
-import { ScorecardData, ScorecardItem, PointOfInterest } from '../types';
-import { researchCell } from '../services/geminiService';
+import { ScorecardData, ScorecardItem, PointOfInterest, Citation } from '../types';
+import { researchCell } from '../services/service';
+
+function truncateUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.length > 28 ? u.pathname.slice(0, 25) + '...' : u.pathname;
+    return `${u.hostname}${path === '/' ? '' : path}`;
+  } catch {
+    return url.length > 40 ? url.slice(0, 37) + '...' : url;
+  }
+}
+
+function CitedAnalysis({ value, citations, onBlur }: {
+  value: string;
+  citations?: Citation[];
+  onBlur: (val: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  const startEdit = () => {
+    setEditing(true);
+    setTimeout(() => {
+      if (!ref.current) return;
+      ref.current.focus();
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(ref.current);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }, 0);
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLSpanElement>) => {
+    const text = e.currentTarget.innerText.replace(/\s+/g, ' ').trim();
+    setEditing(false);
+    if (text !== value) onBlur(text);
+  };
+
+  if (editing) {
+    return (
+      <span
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        className="editable-field"
+        onBlur={handleBlur}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ref.current?.blur(); } }}
+      >
+        {value}
+      </span>
+    );
+  }
+
+  const parts = value.split(/(\[\d+\])/g);
+  return (
+    <span className="editable-field cited-analysis" onClick={startEdit}>
+      {parts.map((part, i) => {
+        const m = part.match(/^\[(\d+)\]$/);
+        if (m) {
+          const id = parseInt(m[1]);
+          const cite = citations?.find(c => c.id === id);
+          if (cite) return (
+            <a
+              key={i}
+              href={cite.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="cite-badge"
+              onClick={(e) => e.stopPropagation()}
+              title={cite.url}
+            >
+              {id}
+            </a>
+          );
+        }
+        return <React.Fragment key={i}>{part}</React.Fragment>;
+      })}
+    </span>
+  );
+}
 
 interface ReportPreviewProps {
   data: ScorecardData;
@@ -15,17 +96,28 @@ function Editable({ value, onBlur, tag = 'span', className = '' }: {
   className?: string;
 }) {
   const Tag = tag as any;
+
+  const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
+
   return (
     <Tag
       contentEditable
       suppressContentEditableWarning
       className={`editable-field ${className}`}
-      onBlur={(e: React.FocusEvent<HTMLElement>) => {
-        const text = e.currentTarget.innerText.trim();
-        if (text !== value) onBlur(text);
+      onKeyDown={(e: React.KeyboardEvent<HTMLElement>) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          (e.target as HTMLElement).blur();
+        }
       }}
-      dangerouslySetInnerHTML={{ __html: value }}
-    />
+      onBlur={(e: React.FocusEvent<HTMLElement>) => {
+        const text = clean(e.currentTarget.innerText);
+        if (text !== value) onBlur(text);
+        e.currentTarget.innerText = text;
+      }}
+    >
+      {value}
+    </Tag>
   );
 }
 
@@ -34,17 +126,31 @@ function EditableNum({ value, onBlur, className = '' }: {
   onBlur: (val: number) => void;
   className?: string;
 }) {
+  const cleanNumber = (text: string) => {
+    const normalized = text.replace(/[^0-9.-]/g, '');
+    return parseFloat(normalized);
+  };
+
   return (
     <span
       contentEditable
       suppressContentEditableWarning
       className={`editable-field ${className}`}
-      onBlur={(e: React.FocusEvent<HTMLElement>) => {
-        const num = parseFloat(e.currentTarget.innerText.trim()) || 0;
-        if (num !== value) onBlur(num);
+      onKeyDown={(e: React.KeyboardEvent<HTMLElement>) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          (e.target as HTMLElement).blur();
+        }
       }}
-      dangerouslySetInnerHTML={{ __html: String(value) }}
-    />
+      onBlur={(e: React.FocusEvent<HTMLElement>) => {
+        const num = cleanNumber(e.currentTarget.innerText.trim());
+        const safeValue = Number.isFinite(num) ? num : 0;
+        if (num !== value) onBlur(num);
+        e.currentTarget.innerText = String(safeValue);
+      }}
+    >
+      {value}
+    </span>
   );
 }
 
@@ -61,16 +167,27 @@ export default function ReportPreview({ data, onUpdate }: ReportPreviewProps) {
     try {
       const item = data.categories[catidx].items[itemidx];
       const result = await researchCell(item.signal, data.domain, data.dealershipName);
+
+      const existing = data.citations ?? [];
+      const offset = existing.length;
+      const remapped: Citation[] = (result.citations ?? []).map(c => ({ ...c, id: c.id + offset }));
+      const analysis = (result.citations ?? []).reduce(
+        (txt, c) => txt.replace(new RegExp(`\\[${c.id}\\]`, 'g'), `[${c.id + offset}]`),
+        result.analysis
+      );
+      const seen = new Set(existing.map(c => c.url));
+      const merged = [...existing, ...remapped.filter(c => !seen.has(c.url))];
+
       const cats = data.categories.map((c, ci) => ci !== catidx ? c : {
         ...c,
         items: c.items.map((it, ii) => ii !== itemidx ? it : {
           ...it,
-          analysis: result.analysis,
+          analysis,
           score: result.score,
           weightedScore: result.score * it.weight
         })
       });
-      onUpdate({ ...data, categories: cats });
+      onUpdate({ ...data, categories: cats, citations: merged });
     } catch (err) {
       console.error('search failed:', err);
     } finally {
@@ -155,7 +272,7 @@ export default function ReportPreview({ data, onUpdate }: ReportPreviewProps) {
       </div>
 
       {/* PAGE 2: The Scorecard */}
-      <div className="page">
+      <div className="page scorecard-page">
         <div className="header">
           <img src="https://i.postimg.cc/c4rmhK2N/2023-CHD-Click-Here-Logo-Horizontal-Cropped.png" alt="Click Here Digital Logo" />
           <h1>AI Vetting Scorecard</h1>
@@ -192,7 +309,13 @@ export default function ReportPreview({ data, onUpdate }: ReportPreviewProps) {
                       {searching === `${catidx}-${itemidx}` ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
                     </button>
                   </td>
-                  <td><Editable value={item.analysis} onBlur={(v) => updateItem(catidx, itemidx, 'analysis', v)} /></td>
+                  <td>
+                    <CitedAnalysis
+                      value={item.analysis}
+                      citations={data.citations}
+                      onBlur={(v) => updateItem(catidx, itemidx, 'analysis', v)}
+                    />
+                  </td>
                   <td className="score-col"><EditableNum value={item.score} onBlur={(v) => updateItem(catidx, itemidx, 'score', v)} /></td>
                   <td className="weight-col">x<EditableNum value={item.weight} onBlur={(v) => updateItem(catidx, itemidx, 'weight', v)} /></td>
                   <td className="total-col"><EditableNum value={item.weightedScore} onBlur={(v) => updateItem(catidx, itemidx, 'weightedScore', v)} /></td>
@@ -205,9 +328,11 @@ export default function ReportPreview({ data, onUpdate }: ReportPreviewProps) {
             <tr className="total-row">
               <td colSpan={4}>Total Score:</td>
               <td className="final-score">
-                <span className="score-num"><EditableNum value={data.totalScore} onBlur={(v) => updateField('totalScore', v)} /></span>
+                <span className="score-num">
+                  <EditableNum value={data.totalScore} onBlur={(v) => updateField('totalScore', v)} />
+                </span>
                 {' / '}
-                <EditableNum value={data.maxScore} onBlur={(v) => updateField('maxScore', v)} />
+                <span>{data.maxScore ?? 100}</span>
               </td>
             </tr>
           </tbody>
@@ -215,7 +340,7 @@ export default function ReportPreview({ data, onUpdate }: ReportPreviewProps) {
       </div>
 
       {/* PAGE 3: The Analysis */}
-      <div className="page">
+      <div className="page analysis-page">
         <div className="header">
           <img src="https://i.postimg.cc/c4rmhK2N/2023-CHD-Click-Here-Logo-Horizontal-Cropped.png" alt="Click Here Digital Logo" />
           <h1>Detailed Analysis Findings</h1>
@@ -238,8 +363,34 @@ export default function ReportPreview({ data, onUpdate }: ReportPreviewProps) {
 
         <div className="additional-text">
           <strong>Concluding Summary:</strong>{' '}
-          <Editable value={data.concludingSummary} onBlur={(v) => updateField('concludingSummary', v)} />
+          <CitedAnalysis
+            value={data.concludingSummary}
+            citations={data.citations}
+            onBlur={(v) => updateField('concludingSummary', v)}
+          />
         </div>
+
+        {(data.citations?.length ?? 0) > 0 && (
+          <div className="sources-section">
+            <h3>Sources</h3>
+            <div className="sources-list">
+              {data.citations!.map(c => (
+                <div key={c.id} className="source-row">
+                  <span className="source-num">[{c.id}]</span>
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="source-link"
+                    title={c.url}
+                  >
+                    {truncateUrl(c.url)}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
