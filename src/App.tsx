@@ -3,7 +3,7 @@ import { FileText, Download, Image as ImageIcon, FileSpreadsheet, Loader2, Refre
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { ScorecardData, ScorecardCategory, AnalysisSection } from './types';
-import { parseScorecard, generateFromNap, setOpenRouterKey, hasOpenRouterKey } from './services/service';
+import { parseScorecard, generateFromNap, setApiKey, setProvider, hasApiKey, getCurrentProvider, type AIProvider } from './services/service';
 import ReportPreview from './components/ReportPreview';
 
 type Mode = 'both' | 'nap' | 'report';
@@ -14,8 +14,9 @@ export default function App() {
   const [domain, setDomain] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('openrouter_key') || '');
-  const [showKeyInput, setShowKeyInput] = useState(!hasOpenRouterKey());
+  const [apiKeyInput, setApiKeyInput] = useState(() => localStorage.getItem('ai_api_key') || localStorage.getItem('openrouter_key') || '');
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>(() => getCurrentProvider());
+  const [showKeyInput, setShowKeyInput] = useState(!hasApiKey());
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportData, setReportData] = useState<ScorecardData | null>(null);
@@ -125,6 +126,46 @@ export default function App() {
     setInputText('');
     setReportData(null);
     setError(null);
+  };
+
+  const [copied, setCopied] = useState(false);
+  
+  const copyVettingPrompt = async () => {
+    const prompt = `Research the following dealership and create a vetting scorecard:
+
+DEALERSHIP NAME: [DEALERSHIP NAME]
+DOMAIN: [DOMAIN]
+ADDRESS: [ADDRESS]
+PHONE: [PHONE NUMBER]
+
+Score each of the following signals on a 1-5 scale based on your research:
+
+1. Legitimacy & Transparency (weight: 4) — NAP match across GBP/site/ads, visible licensing, privacy policy, ownership clarity
+2. Online Reputation & Reviews (weight: 4) — star rating, review volume, recency, sentiment trends, owner response rate
+3. Staff Expertise & Experience (weight: 1) — bios, certs, tenure, chat/phone responsiveness
+4. VDP Accuracy & Detail (weight: 4) — VIN schema, real photos, CarFax links on THEIR site
+5. Pricing & Fee Transparency (weight: 3) — clear MSRP vs sale price, doc fee disclosure, incentive consistency
+6. Informational Content Quality (weight: 2) — buyer guides, model comparisons, service explainers
+7. Local Links & Citations (weight: 2) — chamber, BBB, sponsorships, local press, citation consistency
+
+For each signal, provide:
+- A 1-2 sentence analysis with specific evidence
+- A score from 1-5
+- The weighted score (score × weight)
+
+Then provide:
+- Total score out of 100
+- 2-3 Key Strengths they can leverage
+- 2-3 Priority Fixes with specific actions
+- A concluding summary with tier rating (90+ Excellent, 75-89 Good, 55-74 Borderline, <55 Poor)`;
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const exportPDF = async () => {
@@ -247,42 +288,87 @@ export default function App() {
                 <h2 className="text-2xl font-bold text-[#190074] uppercase" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>
                   RUN AI SCORECARD REPORT
                 </h2>
-                <button
-                  type="button"
-                  onClick={loadSample}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-bold uppercase rounded-md border border-[#1645DF] text-[#1645DF] bg-white hover:bg-[#1645DF] hover:text-white transition-colors"
-                  style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
-                >
-                  Load Sample
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={copyVettingPrompt}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-bold uppercase rounded-md border border-[#1645DF] text-[#1645DF] bg-white hover:bg-[#1645DF] hover:text-white transition-colors"
+                    style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
+                  >
+                    {copied ? 'Copied!' : 'Copy Prompt'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={loadSample}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-bold uppercase rounded-md border border-[#1645DF] text-[#1645DF] bg-white hover:bg-[#1645DF] hover:text-white transition-colors"
+                    style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
+                  >
+                    Load Sample
+                  </button>
+                </div>
               </div>
               
               {showKeyInput && (
                 <div className="mb-6 p-4 bg-[#f0f4ff] rounded-lg border border-[#1645DF]/20">
+                  <div className="flex flex-col sm:flex-row gap-4 mb-3">
+                    <div className="flex-1">
+                      <label htmlFor="provider-select" className="block text-sm font-bold text-[#190074] uppercase mb-1" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>
+                        AI Provider
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="provider-select"
+                          value={selectedProvider}
+                          onChange={(e) => setSelectedProvider(e.target.value as AIProvider)}
+                          className="w-full rounded-lg border border-[#190074]/20 focus:border-[#1645DF] focus:ring-[#1645DF] p-2.5 pr-10 text-sm bg-white appearance-none cursor-pointer"
+                          style={{ fontFamily: "'Google Sans', sans-serif" }}
+                        >
+                          <option value="openrouter">OpenRouter</option>
+                          <option value="openai">OpenAI</option>
+                          <option value="gemini">Google Gemini</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                          <svg className="h-4 w-4 text-[#190074]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
                   <label htmlFor="api-key" className="block text-sm font-bold text-[#190074] uppercase mb-1" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>
-                    OpenRouter API Key
+                    {selectedProvider === 'openrouter' ? 'OpenRouter' : selectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} API Key
                   </label>
                   <p className="text-xs text-gray-600 mb-2">
-                    get your free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">openrouter.ai/keys</a>
+                    {selectedProvider === 'openrouter' && (
+                      <>get your free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">openrouter.ai/keys</a></>
+                    )}
+                    {selectedProvider === 'openai' && (
+                      <>get your key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">platform.openai.com/api-keys</a></>
+                    )}
+                    {selectedProvider === 'gemini' && (
+                      <>get your key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">aistudio.google.com/app/apikey</a></>
+                    )}
                   </p>
                   <div className="flex gap-2">
                     <input
                       id="api-key"
                       type="password"
                       className="flex-1 rounded-lg border border-[#190074]/20 focus:border-[#1645DF] focus:ring-[#1645DF] p-2.5 text-sm font-mono"
-                      placeholder="sk-or-v1-..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={selectedProvider === 'openrouter' ? 'sk-or-v1-...' : selectedProvider === 'openai' ? 'sk-...' : 'AI...'}
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
                     />
                     <button
                       type="button"
                       onClick={() => {
-                        if (apiKey.trim()) {
-                          setOpenRouterKey(apiKey.trim());
+                        if (apiKeyInput.trim()) {
+                          setApiKey(apiKeyInput.trim());
+                          setProvider(selectedProvider);
                           setShowKeyInput(false);
                         }
                       }}
-                      disabled={!apiKey.trim()}
+                      disabled={!apiKeyInput.trim()}
                       className="px-4 py-2 text-sm font-bold uppercase rounded-lg bg-[#1645DF] text-white hover:bg-[#190074] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
                     >
@@ -294,13 +380,15 @@ export default function App() {
 
               {!showKeyInput && (
                 <div className="mb-4 flex items-center justify-between text-xs text-gray-500">
-                  <span>api key saved</span>
+                  <span>
+                    {selectedProvider === 'openrouter' ? 'OpenRouter' : selectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} key saved
+                  </span>
                   <button
                     type="button"
                     onClick={() => setShowKeyInput(true)}
                     className="text-[#1645DF] hover:underline"
                   >
-                    change key
+                    change provider / key
                   </button>
                 </div>
               )}
