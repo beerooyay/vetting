@@ -26,9 +26,9 @@ export const setOpenRouterKey = (key: string) => {
 export const hasOpenRouterKey = () => hasApiKey();
 
 const MODELS: Record<AIProvider, string> = {
-  openrouter: "arcee-ai/trinity-large-preview:free:online",
+  openrouter: "openrouter/free:online",
   openai: "gpt-4o-mini",
-  gemini: "gemini-1.5-flash",
+  gemini: "gemini-2.5-flash",
 };
 const today = () => new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
