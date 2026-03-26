@@ -295,7 +295,7 @@ Then provide:
                     className="inline-flex items-center px-3 py-1.5 text-xs font-bold uppercase rounded-md border border-[#1645DF] text-[#1645DF] bg-white hover:bg-[#1645DF] hover:text-white transition-colors"
                     style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
                   >
-                    {copied ? 'Copied!' : 'Copy Vetting Prompt'}
+                    {copied ? 'Copied!' : 'Copy Prompt'}
                   </button>
                   <button
                     type="button"
