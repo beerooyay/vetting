@@ -128,6 +128,46 @@ export default function App() {
     setError(null);
   };
 
+  const [copied, setCopied] = useState(false);
+  
+  const copyVettingPrompt = async () => {
+    const prompt = `Research the following dealership and create a vetting scorecard:
+
+DEALERSHIP NAME: [DEALERSHIP NAME]
+DOMAIN: [DOMAIN]
+ADDRESS: [ADDRESS]
+PHONE: [PHONE NUMBER]
+
+Score each of the following signals on a 1-5 scale based on your research:
+
+1. Legitimacy & Transparency (weight: 4) — NAP match across GBP/site/ads, visible licensing, privacy policy, ownership clarity
+2. Online Reputation & Reviews (weight: 4) — star rating, review volume, recency, sentiment trends, owner response rate
+3. Staff Expertise & Experience (weight: 1) — bios, certs, tenure, chat/phone responsiveness
+4. VDP Accuracy & Detail (weight: 4) — VIN schema, real photos, CarFax links on THEIR site
+5. Pricing & Fee Transparency (weight: 3) — clear MSRP vs sale price, doc fee disclosure, incentive consistency
+6. Informational Content Quality (weight: 2) — buyer guides, model comparisons, service explainers
+7. Local Links & Citations (weight: 2) — chamber, BBB, sponsorships, local press, citation consistency
+
+For each signal, provide:
+- A 1-2 sentence analysis with specific evidence
+- A score from 1-5
+- The weighted score (score × weight)
+
+Then provide:
+- Total score out of 100
+- 2-3 Key Strengths they can leverage
+- 2-3 Priority Fixes with specific actions
+- A concluding summary with tier rating (90+ Excellent, 75-89 Good, 55-74 Borderline, <55 Poor)`;
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   const exportPDF = async () => {
     const container = document.getElementById('report-content');
     if (!container) return;
@@ -248,14 +288,24 @@ export default function App() {
                 <h2 className="text-2xl font-bold text-[#190074] uppercase" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>
                   RUN AI SCORECARD REPORT
                 </h2>
-                <button
-                  type="button"
-                  onClick={loadSample}
-                  className="inline-flex items-center px-3 py-1.5 text-xs font-bold uppercase rounded-md border border-[#1645DF] text-[#1645DF] bg-white hover:bg-[#1645DF] hover:text-white transition-colors"
-                  style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
-                >
-                  Load Sample
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={copyVettingPrompt}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-bold uppercase rounded-md border border-[#1645DF] text-[#1645DF] bg-white hover:bg-[#1645DF] hover:text-white transition-colors"
+                    style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
+                  >
+                    {copied ? 'Copied!' : 'Copy Vetting Prompt'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={loadSample}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-bold uppercase rounded-md border border-[#1645DF] text-[#1645DF] bg-white hover:bg-[#1645DF] hover:text-white transition-colors"
+                    style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
+                  >
+                    Load Sample
+                  </button>
+                </div>
               </div>
               
               {showKeyInput && (
