@@ -265,17 +265,24 @@ export default function App() {
                       <label htmlFor="provider-select" className="block text-sm font-bold text-[#190074] uppercase mb-1" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>
                         AI Provider
                       </label>
-                      <select
-                        id="provider-select"
-                        value={selectedProvider}
-                        onChange={(e) => setSelectedProvider(e.target.value as AIProvider)}
-                        className="w-full rounded-lg border border-[#190074]/20 focus:border-[#1645DF] focus:ring-[#1645DF] p-2.5 text-sm bg-white"
-                        style={{ fontFamily: "'Google Sans', sans-serif" }}
-                      >
-                        <option value="openrouter">OpenRouter</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="gemini">Google Gemini</option>
-                      </select>
+                      <div className="relative">
+                        <select
+                          id="provider-select"
+                          value={selectedProvider}
+                          onChange={(e) => setSelectedProvider(e.target.value as AIProvider)}
+                          className="w-full rounded-lg border border-[#190074]/20 focus:border-[#1645DF] focus:ring-[#1645DF] p-2.5 pr-10 text-sm bg-white appearance-none cursor-pointer"
+                          style={{ fontFamily: "'Google Sans', sans-serif" }}
+                        >
+                          <option value="openrouter">OpenRouter</option>
+                          <option value="openai">OpenAI</option>
+                          <option value="gemini">Google Gemini</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                          <svg className="h-4 w-4 text-[#190074]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   
