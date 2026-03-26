@@ -3,13 +3,33 @@ import { ScorecardData, Citation } from "../types";
 import { buildSystemPrompt, JSON_SCHEMA } from "./prompt";
 import { enforceStandardScorecard } from "./scorecardUtils";
 
-const getOpenRouterKey = () => localStorage.getItem('openrouter_key') || '';
+export type AIProvider = 'openrouter' | 'openai' | 'gemini';
+
+const getApiKey = () => localStorage.getItem('ai_api_key') || '';
+const getProvider = (): AIProvider => (localStorage.getItem('ai_provider') as AIProvider) || 'openrouter';
 const getFirecrawlKey = () => localStorage.getItem('firecrawl_key') || '';
 
-export const setOpenRouterKey = (key: string) => localStorage.setItem('openrouter_key', key);
+// Legacy support for existing OpenRouter keys
+const getLegacyOpenRouterKey = () => localStorage.getItem('openrouter_key') || '';
+
+export const setApiKey = (key: string) => localStorage.setItem('ai_api_key', key);
+export const setProvider = (provider: AIProvider) => localStorage.setItem('ai_provider', provider);
 export const setFirecrawlKey = (key: string) => localStorage.setItem('firecrawl_key', key);
-export const hasOpenRouterKey = () => !!getOpenRouterKey();
-const MODEL = "arcee-ai/trinity-large-preview:free:online";
+export const hasApiKey = () => !!(getApiKey() || getLegacyOpenRouterKey());
+export const getCurrentProvider = () => getProvider();
+
+// Legacy exports for backward compatibility
+export const setOpenRouterKey = (key: string) => {
+  setApiKey(key);
+  setProvider('openrouter');
+};
+export const hasOpenRouterKey = () => hasApiKey();
+
+const MODELS: Record<AIProvider, string> = {
+  openrouter: "arcee-ai/trinity-large-preview:free:online",
+  openai: "gpt-4o-mini",
+  gemini: "gemini-1.5-flash",
+};
 const today = () => new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
 interface ChatResult {
@@ -18,9 +38,11 @@ interface ChatResult {
 }
 
 async function chat(prompt: string, system?: string): Promise<ChatResult> {
-  const key = getOpenRouterKey();
+  const key = getApiKey() || getLegacyOpenRouterKey();
+  const provider = getProvider();
+  
   if (!key) {
-    throw new Error("OpenRouter key missing.");
+    throw new Error("API key missing. Please add your API key.");
   }
 
   try {
@@ -30,53 +52,107 @@ async function chat(prompt: string, system?: string): Promise<ChatResult> {
     }
     messages.push({ role: 'user', content: prompt });
 
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'authorization': `Bearer ${key}`,
-        'http-referer': window.location.origin,
-        'x-title': 'AI Vetting Scorecard',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages,
-        temperature: 0.3,
-        max_tokens: 8192,
-        plugins: [{ id: 'web', max_results: 10 }],
-      }),
-    });
+    let res: Response;
+    
+    if (provider === 'openai') {
+      res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'authorization': `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: MODELS.openai,
+          messages,
+          temperature: 0.3,
+          max_tokens: 8192,
+        }),
+      });
+    } else if (provider === 'gemini') {
+      // Gemini uses a different API format
+      const geminiMessages = messages.map(m => ({
+        role: m.role === 'system' ? 'user' : m.role,
+        parts: [{ text: m.content }],
+      }));
+      
+      // If there was a system message, prepend it to the first user message
+      if (system && geminiMessages.length > 1) {
+        geminiMessages[0].parts[0].text = `System instructions: ${system}\n\n${geminiMessages[1].parts[0].text}`;
+        geminiMessages.splice(1, 1);
+      }
+      
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELS.gemini}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: geminiMessages,
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 8192,
+          },
+        }),
+      });
+    } else {
+      // OpenRouter (default)
+      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'authorization': `Bearer ${key}`,
+          'http-referer': window.location.origin,
+          'x-title': 'AI Vetting Scorecard',
+        },
+        body: JSON.stringify({
+          model: MODELS.openrouter,
+          messages,
+          temperature: 0.3,
+          max_tokens: 8192,
+          plugins: [{ id: 'web', max_results: 10 }],
+        }),
+      });
+    }
 
     if (!res.ok) {
       const text = await res.text();
-      console.error('openrouter error', res.status, text);
-      throw new Error(`OpenRouter error ${res.status}: ${text.slice(0, 200)}`);
+      console.error(`${provider} error`, res.status, text);
+      throw new Error(`${provider} error ${res.status}: ${text.slice(0, 200)}`);
     }
 
     const data = await res.json();
-    const message = data?.choices?.[0]?.message;
-    const raw = message?.content || '';
+    let raw = '';
+    const citations: Citation[] = [];
+    
+    if (provider === 'gemini') {
+      // Gemini response format
+      raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else {
+      // OpenAI and OpenRouter format
+      const message = data?.choices?.[0]?.message;
+      raw = message?.content || '';
+      
+      // Extract citations from OpenRouter web search annotations
+      if (provider === 'openrouter' && Array.isArray(message?.annotations)) {
+        for (const ann of message.annotations) {
+          if (ann?.type === 'url_citation' && ann?.url_citation?.url) {
+            citations.push({
+              id: citations.length + 1,
+              url: ann.url_citation.url,
+              title: ann.url_citation.title || ann.url_citation.url,
+            });
+          }
+        }
+        console.log('openrouter web citations:', citations.length);
+      }
+    }
+    
     if (!raw) {
-      console.error('openrouter empty response', data);
+      console.error(`${provider} empty response`, data);
       throw new Error('Provider returned an empty response');
     }
 
-    // Extract citations from OpenRouter web search annotations
-    const citations: Citation[] = [];
-    if (Array.isArray(message?.annotations)) {
-      for (const ann of message.annotations) {
-        if (ann?.type === 'url_citation' && ann?.url_citation?.url) {
-          citations.push({
-            id: citations.length + 1,
-            url: ann.url_citation.url,
-            title: ann.url_citation.title || ann.url_citation.url,
-          });
-        }
-      }
-      console.log('openrouter web citations:', citations.length);
-    }
-
-    console.log('openrouter raw response preview', raw.slice(0, 1600));
+    console.log(`${provider} raw response preview`, raw.slice(0, 1600));
     return { content: extractJson(raw), citations };
   } catch (err: any) {
     const detail = err?.message || '';

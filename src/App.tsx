@@ -3,7 +3,7 @@ import { FileText, Download, Image as ImageIcon, FileSpreadsheet, Loader2, Refre
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { ScorecardData, ScorecardCategory, AnalysisSection } from './types';
-import { parseScorecard, generateFromNap, setOpenRouterKey, hasOpenRouterKey } from './services/service';
+import { parseScorecard, generateFromNap, setApiKey, setProvider, hasApiKey, getCurrentProvider, type AIProvider } from './services/service';
 import ReportPreview from './components/ReportPreview';
 
 type Mode = 'both' | 'nap' | 'report';
@@ -14,8 +14,9 @@ export default function App() {
   const [domain, setDomain] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('openrouter_key') || '');
-  const [showKeyInput, setShowKeyInput] = useState(!hasOpenRouterKey());
+  const [apiKeyInput, setApiKeyInput] = useState(() => localStorage.getItem('ai_api_key') || localStorage.getItem('openrouter_key') || '');
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>(() => getCurrentProvider());
+  const [showKeyInput, setShowKeyInput] = useState(!hasApiKey());
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportData, setReportData] = useState<ScorecardData | null>(null);
@@ -259,30 +260,58 @@ export default function App() {
               
               {showKeyInput && (
                 <div className="mb-6 p-4 bg-[#f0f4ff] rounded-lg border border-[#1645DF]/20">
+                  <div className="flex flex-col sm:flex-row gap-4 mb-3">
+                    <div className="flex-1">
+                      <label htmlFor="provider-select" className="block text-sm font-bold text-[#190074] uppercase mb-1" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>
+                        AI Provider
+                      </label>
+                      <select
+                        id="provider-select"
+                        value={selectedProvider}
+                        onChange={(e) => setSelectedProvider(e.target.value as AIProvider)}
+                        className="w-full rounded-lg border border-[#190074]/20 focus:border-[#1645DF] focus:ring-[#1645DF] p-2.5 text-sm bg-white"
+                        style={{ fontFamily: "'Google Sans', sans-serif" }}
+                      >
+                        <option value="openrouter">OpenRouter</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="gemini">Google Gemini</option>
+                      </select>
+                    </div>
+                  </div>
+                  
                   <label htmlFor="api-key" className="block text-sm font-bold text-[#190074] uppercase mb-1" style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}>
-                    OpenRouter API Key
+                    {selectedProvider === 'openrouter' ? 'OpenRouter' : selectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} API Key
                   </label>
                   <p className="text-xs text-gray-600 mb-2">
-                    get your free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">openrouter.ai/keys</a>
+                    {selectedProvider === 'openrouter' && (
+                      <>get your free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">openrouter.ai/keys</a></>
+                    )}
+                    {selectedProvider === 'openai' && (
+                      <>get your key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">platform.openai.com/api-keys</a></>
+                    )}
+                    {selectedProvider === 'gemini' && (
+                      <>get your key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-[#1645DF] underline">aistudio.google.com/app/apikey</a></>
+                    )}
                   </p>
                   <div className="flex gap-2">
                     <input
                       id="api-key"
                       type="password"
                       className="flex-1 rounded-lg border border-[#190074]/20 focus:border-[#1645DF] focus:ring-[#1645DF] p-2.5 text-sm font-mono"
-                      placeholder="sk-or-v1-..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={selectedProvider === 'openrouter' ? 'sk-or-v1-...' : selectedProvider === 'openai' ? 'sk-...' : 'AI...'}
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
                     />
                     <button
                       type="button"
                       onClick={() => {
-                        if (apiKey.trim()) {
-                          setOpenRouterKey(apiKey.trim());
+                        if (apiKeyInput.trim()) {
+                          setApiKey(apiKeyInput.trim());
+                          setProvider(selectedProvider);
                           setShowKeyInput(false);
                         }
                       }}
-                      disabled={!apiKey.trim()}
+                      disabled={!apiKeyInput.trim()}
                       className="px-4 py-2 text-sm font-bold uppercase rounded-lg bg-[#1645DF] text-white hover:bg-[#190074] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       style={{ fontFamily: "'Barlow Semi Condensed', 'Barlow', sans-serif" }}
                     >
@@ -294,13 +323,15 @@ export default function App() {
 
               {!showKeyInput && (
                 <div className="mb-4 flex items-center justify-between text-xs text-gray-500">
-                  <span>api key saved</span>
+                  <span>
+                    {selectedProvider === 'openrouter' ? 'OpenRouter' : selectedProvider === 'openai' ? 'OpenAI' : 'Google Gemini'} key saved
+                  </span>
                   <button
                     type="button"
                     onClick={() => setShowKeyInput(true)}
                     className="text-[#1645DF] hover:underline"
                   >
-                    change key
+                    change provider / key
                   </button>
                 </div>
               )}
